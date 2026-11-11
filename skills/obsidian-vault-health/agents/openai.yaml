@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian Vault Health"
+  short_description: "Read-only vault link and metadata checks"
+  default_prompt: "Use $obsidian-vault-health to audit my selected vault without modifying any notes."
