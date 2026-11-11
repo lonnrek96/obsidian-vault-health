@@ -11,6 +11,7 @@ import posixpath
 import re
 import sys
 from urllib.parse import unquote, urlsplit
+from urllib.request import url2pathname
 
 import yaml
 
@@ -154,13 +155,14 @@ def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None, e
             add(path, 'local-link-syntax', raw,
                 'A local link without file:// may be interpreted as a vault link. '
                 'Confirm the target before using an encoded absolute file:/// URI; preserve historical sources.', 'warning')
-        # Resolve symlinks before checking device scope; never probe their target
-        # for existence when it is outside the explicitly selected local root.
-        local = local.resolve()
         if re.search(r':\d+(?::\d+)?$', local.name):
             add(path, 'local-location-syntax', raw,
                 'Contains file:line syntax; not treated as a literal missing filename or an app-tested location.', 'warning')
-        elif local_root and (local == local_root or local_root in local.parents):
+            return
+        # Normalize parent segments before resolving symlinks (also on Windows
+        # 3.9), then check scope before probing existence.
+        local = Path(os.path.abspath(local)).resolve()
+        if local_root and (local == local_root or local_root in local.parents):
             if not local.exists():
                 add(path, 'local-missing', raw, 'Target does not exist within the explicitly selected local scope.')
         else:
@@ -218,7 +220,13 @@ def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None, e
                     add(path, 'local-unverified', raw,
                         'Remote file URI or network location; not connected, mounted or checked.', 'info')
                 else:
-                    check_local(path, raw, Path(local_path))
+                    check_local(path, raw, Path(url2pathname(uri.path)))
+                continue
+            if kind == 'markdown' and re.match(r'^[A-Za-z]:[\\/]', raw):
+                if os.name == 'nt':
+                    check_local(path, raw, Path(unquote(raw.partition('#')[0])), ambiguous=True)
+                else:
+                    add(path, 'local-unverified', raw, 'A Windows path cannot be checked on this operating system.', 'info')
                 continue
             if re.match(r'^[a-zA-Z][\w+.-]*:', raw) or raw.startswith('//'):
                 continue

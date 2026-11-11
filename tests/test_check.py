@@ -1,3 +1,4 @@
+import os
 import hashlib
 import json
 from pathlib import Path
@@ -87,7 +88,8 @@ updated: 2026-10-23
                               ['local-link-syntax', 'local-missing'])
 
     def test_existing_absolute_link_warns_but_file_uri_is_checked(self):
-        target = self.put('repo/中文 note #1?.md', '# Real')
+        filename = 'repo/中文 note #1' + ('?' if os.name != 'nt' else '') + '.md'
+        target = self.put(filename, '# Real')
         self.put('vault/Home.md', f'[old](<{target.as_posix().replace("#", "%23").replace("?", "%3F")}>)\n'
                  f'[fixed](<{target.as_uri()}#heading>)\n'
                  f'[missing](<{(self.root / "repo/missing.md").as_uri()}>)')
@@ -117,7 +119,9 @@ updated: 2026-10-23
             issues = check.scan(self.root / 'vault', local_root=self.root)['issues']
         self.assertCountEqual([i['code'] for i in issues],
                               ['local-unverified', 'local-link-syntax', 'local-link-syntax', 'local-link-syntax'])
-        (self.root / 'outside').symlink_to('/tmp', target_is_directory=True)
+        external = tempfile.TemporaryDirectory()
+        self.addCleanup(external.cleanup)
+        (self.root / 'outside').symlink_to(external.name, target_is_directory=True)
         self.put('vault/note.md', f'[link](<{(self.root / "outside/missing.md").as_uri()}>)')
         with patch.object(Path, 'exists', side_effect=AssertionError('symlink escaped scope')):
             issues = check.scan(self.root / 'vault', local_root=self.root)['issues']
@@ -159,7 +163,9 @@ updated: 2026-10-23
 
     def test_external_symlink_does_not_escape_local_scope(self):
         self.put('vault/note.md', '[link](../outside/missing.md)')
-        (self.root / 'outside').symlink_to('/tmp', target_is_directory=True)
+        external = tempfile.TemporaryDirectory()
+        self.addCleanup(external.cleanup)
+        (self.root / 'outside').symlink_to(external.name, target_is_directory=True)
         with patch.object(Path, 'exists', side_effect=AssertionError('unexpected existence probe')):
             issues = check.scan(self.root / 'vault', local_root=self.root)['issues']
         self.assertCountEqual([i['code'] for i in issues], ['local-link-syntax', 'local-unverified'])
@@ -195,5 +201,7 @@ updated: 2026-10-23
         before = hashes()
         self.issues()
         self.assertEqual(hashes(), before)
-        (self.root / 'outside').symlink_to('/tmp', target_is_directory=True)
+        external = tempfile.TemporaryDirectory()
+        self.addCleanup(external.cleanup)
+        (self.root / 'outside').symlink_to(external.name, target_is_directory=True)
         self.assertEqual(len(self.issues()), 1)
