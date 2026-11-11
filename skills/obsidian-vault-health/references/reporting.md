@@ -65,3 +65,33 @@ preserves issue types, severity, counts, groups and age. It does not make a repo
 a verified anonymous dataset. Review these remaining metadata before sharing it.
 The skill guides an agent; it does not restrict the host's other tools or network
 permissions. Installing dependencies can require network access separately.
+
+## Exclusions and readable output
+
+Repeat `--exclude Private --exclude Imports` to skip vault-relative files or
+subtrees before reading. These are exact paths, not glob patterns. Exclusions
+are case-sensitive and do not match similarly named siblings. Explicit links
+into excluded paths produce informational `excluded-target` findings, even if
+the target does not exist: exclusion means unverified. Short wikilinks cannot
+be attributed to unseen notes and can still be reported missing. Exclusions
+are recorded in ordinary JSON reports and must match when using a baseline.
+Old reports without an `excluded` field are treated as having no exclusions.
+
+`--markdown` emits Markdown to stdout; `--language en` or `--language zh-TW`
+controls report headings. Issue codes and technical detail strings stay English.
+Output escapes note-controlled HTML, table separators and Markdown link syntax.
+Review order puts errors before warnings, and current/new errors before historical
+errors. Use `--redact` with Markdown to omit private names and raw details.
+
+`--summary-only` keeps only schema, note/project counts, severity/age counts and
+group counts. It works with text, JSON or Markdown, preserves the scan exit code,
+and cannot be used as a baseline. Counts alone can still be sensitive. Regular
+or redacted reports are never sent anywhere by the checker, but information
+passed to an AI host is processed under that host's policies.
+
+The project installer writes an ignored `runtime.json` into each installed Skill
+with the local Python interpreter path. It is machine-specific and must not be
+shared. An existing installation is never replaced by the installer. Installing
+with `--venv` creates a new environment and downloads PyYAML; `--python` uses an
+existing compatible environment without installing packages. Choose a venv path
+outside the vault. The installer does not launch either agent or sign in.

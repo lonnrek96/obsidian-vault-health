@@ -22,6 +22,31 @@ Windows 請將 `.venv/bin/python` 換成 `.venv\Scripts\python.exe`。
 
 ## 安裝為 Skill
 
+### 快速安裝到專案
+
+下載本倉庫後，在倉庫目錄執行以下指令，同時安裝給兩種工具：
+
+```sh
+python3 install.py --project "/path/to/project" --agent both --venv "/path/outside-vault/health-env"
+```
+
+專案目錄必須已存在，環境路徑必須是新的，並放在 vault 外。
+指令會建立獨立環境、安裝 PyYAML，並將完整 Skill 複製到兩種工具的專案目錄。
+只安裝一種工具時，改用 `--agent codex` 或 `--agent claude-code`。
+若已有同名 Skill，安裝工具會停止，請先人工審閱再決定如何更新。
+安裝不會啟動 AI 工具或模型；下載依賴需要網路。
+
+若已有包含 PyYAML 的 Python 環境，可使用不下載套件的方式：
+
+```sh
+python3 install.py --project "/path/to/project" --agent both --python "/path/to/environment/python"
+```
+
+安裝工具會在安裝目錄寫入被 Git 忽略的 `runtime.json`，記錄本機 Python 位置，供 AI 工具讀取。
+這個檔案含有本機路徑，請勿分享。Windows 若沒有 `python3` 指令，可改用 `python`。
+
+### 手動安裝
+
 以 **Codex 與 Claude Code** 為目標，兩者共用同一份 Skill 指令與 Python 檢查程式。將完整的 `skills/obsidian-vault-health` 資料夾複製到以下任一專案位置：
 
 | 工具 | 安裝後的 Skill 檔案位置 | 手動呼叫方式 |
@@ -47,6 +72,17 @@ Claude Code 使用範例：
 安裝位置與呼叫方式依據 [Codex 官方文件](https://learn.chatgpt.com/docs/build-skills)及 [Claude Code 官方文件](https://code.claude.com/docs/en/skills)。
 共用 Python 檢查器已通過本機合成資料測試；尚未驗證在 Codex 與 Claude Code 內實際啟用 Skill 的流程，其他工具與作業系統也尚未驗證。
 
+## 範例報告
+
+[示範 vault](examples/vault) 完全由虛構筆記組成，包含兩篇筆記與兩個刻意保留的錯誤：一個缺失筆記、一個缺失標題。
+
+- [English report](examples/report.en.md)
+- [繁體中文報告](examples/report.zh-TW.md)
+
+```sh
+.venv/bin/python skills/obsidian-vault-health/scripts/check.py --vault examples/vault --markdown --language zh-TW
+```
+
 ## 選用檢查與報告
 
 ```sh
@@ -59,6 +95,14 @@ Claude Code 使用範例：
 # 移除筆記名稱、連結目標與自由文字細節，再人工審閱是否適合分享。
 .venv/bin/python skills/obsidian-vault-health/scripts/check.py --vault "/path/to/vault" --json --redact
 ```
+
+使用 `--exclude Private --exclude Imports`，可在讀取前排除指定檔案或整個資料夾。
+路徑相對於 vault，不支援萬用字元。明確指向排除區的連結會標示為未驗證；簡短 wikilink 仍可能無法解析。
+使用基準報告時，排除設定必須一致。
+
+使用 `--markdown --language zh-TW` 或 `--markdown --language en` 產生易讀報告與建議檢視順序。
+問題代碼與技術細節仍為英文。任何輸出格式都可搭配 `--summary-only`，僅輸出統計，不含筆記名稱與連結目標。
+統計模式不可作為基準報告。各種格式都保留原本的結束碼；私人報告請儲存於 vault 外。
 
 `--inbox-dir Inbox` 啟用帶日期筆記的存放時間提醒。
 `--local-root` 明確允許檢查指定目錄中、位於 vault 外的本機連結目標是否存在，預設不啟用。
@@ -79,6 +123,13 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -v
 ```
 
 測試使用暫存的合成 vault，涵蓋連結與錨點檢查、基準報告比較、唯讀操作、明確的本機存取範圍、報告去識別化與私人資料邊界。請勿以真實個人筆記取代測試資料。
+
+## 自動檢查與驗證狀態
+
+[GitHub Actions 設定](.github/workflows/check.yml) 會執行測試、專案安裝流程、Skill 格式驗證與常見機密格式掃描，
+目標環境為 Linux、macOS、Windows，搭配 Python 3.9 與 3.13。
+加入設定不代表遠端工作已通過；實際驗證狀態與兩種工具的測試步驟見[驗證說明](docs/verification.md)。
+格式掃描無法保證找出所有機密，也不掃描 Git 歷史或你的 vault。
 
 ## 授權
 

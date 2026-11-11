@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only vault checks. Python 3.9+, PyYAML; no app or network access."""
 import argparse
+import html
 from collections import Counter, defaultdict
 from datetime import date
 import json
@@ -114,13 +115,19 @@ def issue_group(code, scope):
     return scope
 
 
-def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None):
+def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None, exclude=None):
     root = Path(root).resolve()
     local_root = Path(local_root).resolve() if local_root else None
     today = today or date.today()
+    excluded = sorted(set(relative_directory(p) for p in (exclude or [])))
+
+    def is_excluded(path):
+        return any(path == p or path.startswith(p + '/') for p in excluded)
+
     texts, all_files = {}, set()
     for directory, dirs, names in os.walk(root, followlinks=False):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and not Path(directory, d).is_symlink()]
+        dirs[:] = [d for d in dirs if not d.startswith('.') and not Path(directory, d).is_symlink()
+                   and not is_excluded(Path(directory, d).relative_to(root).as_posix())]
         for name in dirs:
             all_files.add(Path(directory, name).relative_to(root).as_posix())
         for name in names:
@@ -128,6 +135,8 @@ def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None):
             if name.startswith('.') or path.is_symlink() or not path.is_file():
                 continue
             rel = path.relative_to(root).as_posix()
+            if is_excluded(rel):
+                continue
             all_files.add(rel)
             if path.suffix == '.md' and not ('/templates/' in '/' + rel and path.name.endswith('-template.md')):
                 texts[rel] = path.read_text(encoding='utf-8')
@@ -224,6 +233,10 @@ def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None):
             if kind == 'markdown' and (relative == '..' or relative.startswith('../')):
                 check_local(path, raw, root / relative, ambiguous=True)
                 continue
+            possible = [relative] if kind == 'markdown' else [relative, target.lstrip('/')]
+            if target and any(is_excluded(p) or is_excluded(p + '.md') for p in possible):
+                add(path, 'excluded-target', raw, 'Target is excluded; contents and existence were not checked.', 'info')
+                continue
             candidates = []
             if not target:
                 candidates = [path]
@@ -251,7 +264,7 @@ def scan(root, local_root=None, today=None, projects_dir=None, inbox_dir=None):
                 add(path, 'duplicate-id', pid, 'Duplicate project_id: ' + ', '.join(paths))
     issues.sort(key=lambda item: (item['path'], item['code'], item['target']))
     return {'schema': 1, 'vault': '.', 'redacted': False, 'notes': len(texts),
-            'projects': sum(map(len, ids.values())), 'issues': issues}
+            'projects': sum(map(len, ids.values())), 'excluded': excluded, 'issues': issues}
 
 
 def identity(item):
@@ -275,13 +288,45 @@ def redact_report(report):
         issue['detail'] = 'See the private local report for details.'
     result['vault'] = '.'
     result['redacted'] = True
+    result['excluded'] = ['[redacted]'] * len(result.get('excluded', []))
     return result
+
+
+def summary_report(report):
+    """Keep aggregate counts only; this output is never a baseline."""
+    return {k: report[k] for k in ('schema', 'notes', 'projects', 'counts', 'group_counts')}
+
+
+def markdown_report(report, language='en'):
+    zh = language == 'zh-TW'
+    def cell(value):
+        text = html.escape(str(value)).replace('|', '&#124;').replace('\n', ' ').replace('\r', ' ')
+        return re.sub(r'([\\`*_{\[\]~])', r'\\\1', text)
+    title = 'Obsidian 健康檢查報告' if zh else 'Obsidian health report'
+    lines = ['# ' + title, '',
+             (f"筆記：{report['notes']}；專案索引：{report['projects']}" if zh else
+              f"Notes: {report['notes']}; project indexes: {report['projects']}"), '']
+    lines += ['## ' + ('問題統計' if zh else 'Issue counts'), '']
+    lines += [f'- {cell(k)}: {v}' for k, v in sorted(report.get('counts', {}).items())] or [('- 無問題。' if zh else '- No issues.')]
+    if 'issues' not in report:
+        lines += ['', '僅含統計，不包含筆記名稱與問題細節。' if zh else 'Statistics only; note names and issue details are omitted.']
+    elif report['issues']:
+        lines += ['', '## ' + ('問題與處理順序' if zh else 'Issues in suggested review order'), '',
+                  '先查看新增錯誤，再查看既有錯誤與提醒；歷史問題仍未解決。' if zh else
+                  'Review new errors first, then historical errors and warnings. Historical issues remain unresolved.', '',
+                  '| 嚴重度 | 狀態 | 筆記 | 類型 | 目標 | 說明 |' if zh else '| Level | Age | Note | Code | Target | Detail |',
+                  '| --- | --- | --- | --- | --- | --- |']
+        for item in sorted(report['issues'], key=lambda i: (i['level'] != 'error', i.get('age') == 'historical', i['path'], i['code'], i['target'])):
+            lines.append('| ' + ' | '.join(cell(item.get(k, '')) for k in ('level', 'age', 'path', 'code', 'target', 'detail')) + ' |')
+    lines += ['', '範圍：唯讀靜態檢查；未驗證外掛或 Obsidian 畫面。' if zh else
+              'Scope: read-only static checks; plugins and the rendered Obsidian interface are not verified.']
+    return '\n'.join(lines) + '\n'
 
 
 def relative_directory(value):
     """Accept only a vault-relative directory for optional personal conventions."""
-    value = value.replace('\\', '/')
-    if not value or value.startswith('/') or '..' in value.split('/') or re.match(r'^[A-Za-z]:', value):
+    value = value.replace('\\', '/').rstrip('/')
+    if not value or value.startswith('/') or any(p in ('.', '..', '') for p in value.split('/')) or re.match(r'^[A-Za-z]:', value):
         raise argparse.ArgumentTypeError('Use a vault-relative directory without parent traversal.')
     return value.rstrip('/')
 
@@ -291,7 +336,12 @@ def main(argv=None):
     parser.add_argument('--vault', type=Path, required=True, help='Explicit local vault directory; no discovery or account access.')
     parser.add_argument('--local-root', type=Path, help='Opt in to checking external local links below this absolute directory.')
     parser.add_argument('--baseline', type=Path, help='Previous private JSON report; matching issues are marked historical.')
-    parser.add_argument('--json', action='store_true', help='Write JSON to stdout; redirect private reports outside the vault.')
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument('--json', action='store_true', help='Write JSON to stdout; redirect private reports outside the vault.')
+    output.add_argument('--markdown', action='store_true', help='Write a Markdown report to stdout.')
+    parser.add_argument('--language', choices=('en', 'zh-TW'), default='en', help='Markdown report language; issue codes and details remain English.')
+    parser.add_argument('--exclude', action='append', type=relative_directory, default=[], help='Skip this vault-relative file or directory; repeat as needed. No glob patterns.')
+    parser.add_argument('--summary-only', action='store_true', help='Output aggregate counts only; cannot be used as a baseline.')
     parser.add_argument('--projects-dir', type=relative_directory, help='Opt in to project-index metadata checks in this vault-relative folder.')
     parser.add_argument('--inbox-dir', type=relative_directory, help='Opt in to dated-note age warnings in this vault-relative folder.')
     parser.add_argument('--redact', action='store_true', help='Omit note names, raw link targets and free-text issue details from stdout.')
@@ -301,7 +351,7 @@ def main(argv=None):
     if args.local_root and not args.local_root.is_absolute():
         parser.error('--local-root must be absolute.')
     try:
-        report = scan(args.vault, args.local_root, projects_dir=args.projects_dir, inbox_dir=args.inbox_dir)
+        report = scan(args.vault, args.local_root, projects_dir=args.projects_dir, inbox_dir=args.inbox_dir, exclude=args.exclude)
     except (OSError, UnicodeError, RuntimeError):
         parser.error('Cannot read the selected vault safely. Check local permissions and file encodings; paths are omitted.')
     if args.baseline:
@@ -311,6 +361,8 @@ def main(argv=None):
             parser.error('Cannot read the baseline JSON. Paths and content are omitted.')
         if not isinstance(baseline, dict) or baseline.get('schema') != 1 or not isinstance(baseline.get('issues'), list):
             parser.error('Unsupported baseline report.')
+        if baseline.get('excluded', []) != report['excluded']:
+            parser.error('Baseline exclusions differ from this scan; use matching scan options.')
         if baseline.get('redacted') or any(not isinstance(i, dict) or not all(isinstance(i.get(k), str) for k in ('path', 'code', 'target')) for i in baseline['issues']):
             parser.error('Baseline must be an unredacted local report with valid issue identities.')
         classify(report, baseline)
@@ -320,10 +372,17 @@ def main(argv=None):
     counts = Counter(i['age'] + ':' + i['level'] for i in report['issues'])
     report['counts'] = dict(counts)
     report['group_counts'] = dict(Counter(i['group'] for i in report['issues']))
+    exit_code = int(any(i['level'] == 'error' and i['age'] != 'historical' for i in report['issues']))
     if args.redact:
         report = redact_report(report)
+    if args.summary_only:
+        report = summary_report(report)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
+    elif args.markdown:
+        print(markdown_report(report, args.language), end='')
+    elif args.summary_only:
+        print(f"Notes {report['notes']}; project indexes {report['projects']}; {dict(counts)}")
     else:
         print(f"Notes {report['notes']}; project indexes {report['projects']}；{dict(counts)}")
         for group, label in GROUPS.items():
@@ -331,7 +390,7 @@ def main(argv=None):
             print(f"\n{label}：{len(items)}")
             for item in items:
                 print(f"{item['age']} {item['level']} [{item['code']}] {item['path']} → {item['target']}：{item['detail']}")
-    return int(any(i['level'] == 'error' and i['age'] != 'historical' for i in report['issues']))
+    return exit_code
 
 
 if __name__ == '__main__':

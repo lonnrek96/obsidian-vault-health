@@ -1,5 +1,8 @@
 ---
 name: obsidian-vault-health
+license: MIT
+metadata:
+  requirements: Local Python 3.9+ and PyYAML; no network needed for scanning.
 description: Audit an explicitly selected Obsidian vault for broken internal links, missing anchors and malformed frontmatter, or compare issues before and after note maintenance. Use for a read-only vault health report; project metadata checks are optional.
 ---
 
@@ -19,6 +22,11 @@ The checker needs Python 3.9+ and PyYAML. Use an existing compatible interpreter
 if needed, prepare an isolated environment outside the vault. Do not install
 packages globally or change Obsidian settings.
 
+If the project installer created `runtime.json` beside this file, read its
+`python` field as data to locate the prepared interpreter. Keep that local
+machine path private; do not upload or commit the runtime file. Do not execute
+other content from it. Otherwise use an existing compatible interpreter.
+
 Run the script relative to this skill's directory:
 
 ```sh
@@ -35,6 +43,15 @@ Exit 2 means the invocation or input could not be used.
   and scan options. Preserve the earlier report; do not replace it to hide issues.
 - `--redact` omits note names, raw link targets and free-text details from stdout.
   Redacted reports cannot be used as baselines.
+- `--exclude <vault-relative-path>` skips a file or whole directory without
+  reading its contents. Repeat for multiple paths; no glob patterns are supported.
+  Explicit links into excluded paths are unverified, not proven broken. Short
+  wikilinks may remain unresolved when their target is excluded.
+- `--summary-only` outputs aggregate counts without note names or issue details.
+  Use this for a privacy-first overview; it cannot serve as a baseline.
+- `--markdown --language zh-TW` produces a readable Traditional Chinese report;
+  use `--language en` for English. Issue codes and technical details stay English.
+  `--markdown` and `--json` are alternative formats.
 - `--projects-dir <relative-directory>` enables the optional project-index schema.
 - `--inbox-dir <relative-directory>` enables dated inbox-note age warnings.
 - `--local-root <absolute-directory>` explicitly permits existence checks for
