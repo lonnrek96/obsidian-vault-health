@@ -87,8 +87,8 @@ These paths and invocation styles follow the official
 [Codex documentation](https://learn.chatgpt.com/docs/build-skills) and
 [Claude Code documentation](https://code.claude.com/docs/en/skills).
 The shared Python checker has passed local synthetic tests. Actual Skill
-activation inside Codex and Claude Code has not yet been tested. Other agents
-and operating systems are not currently verified.
+activation inside Codex and Claude Code has not yet been tested. Automated checker tests passed on Linux, macOS and Windows with Python 3.9 and
+3.13; this does not verify other agents or real host behavior.
 
 ## Example reports
 

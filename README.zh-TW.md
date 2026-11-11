@@ -70,7 +70,7 @@ Claude Code 使用範例：
 ```
 
 安裝位置與呼叫方式依據 [Codex 官方文件](https://learn.chatgpt.com/docs/build-skills)及 [Claude Code 官方文件](https://code.claude.com/docs/en/skills)。
-共用 Python 檢查器已通過本機合成資料測試；尚未驗證在 Codex 與 Claude Code 內實際啟用 Skill 的流程，其他工具與作業系統也尚未驗證。
+共用 Python 檢查器已通過本機合成資料測試；尚未驗證在 Codex 與 Claude Code 內實際啟用 Skill 的流程，檢查器已通過 Linux、macOS、Windows 搭配 Python 3.9 與 3.13 的自動測試，但不代表其他 AI 工具或真實模型流程已驗證。
 
 ## 範例報告
 

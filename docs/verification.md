@@ -13,7 +13,7 @@ notes, credentials or private reports are used in tests.
 | Skill format and public-file pattern scan | Local check; bounded patterns, not a complete secrets guarantee |
 | Real Codex discovery and invocation | Pending; direct script execution is not discovery evidence |
 | Real Claude Code discovery and invocation | Pending; requires Claude Code access |
-| Linux / Windows and other Python versions | Workflow configured; no remote pass claimed in this version |
+| Linux / macOS / Windows, Python 3.9 and 3.13 | Six remote jobs passed on checker commit `c186ccd`; Windows skips the POSIX-only FIFO test |
 
 ## Reproduce local checks
 
@@ -54,3 +54,7 @@ performs them. Never silently substitute API billing or another provider.
 
 中文說明：本機測試使用虛構資料。安裝目錄與程式可執行，不等於 AI 工具已辨識並正確呼叫技能。
 兩種工具的真實操作與遠端 CI 結果，必須分別取得證據後才標示通過。
+
+## Remote checker evidence
+
+[GitHub Actions run 43020052686](https://github.com/lonnrek96/obsidian-vault-health/actions/runs/43020052686) passed all six OS/Python combinations on `c186ccd8ffc4e72a1bfd4a3f9ffd2ac8114a3e30`. Linux uses Ubuntu 24.04 because Python 3.9 packages are not available on Ubuntu 26.04. Windows local paths and encoded `file:` URIs are handled using the platform pathname conversion. This is checker/installation evidence, not real AI-host discovery or model behavior evidence.
